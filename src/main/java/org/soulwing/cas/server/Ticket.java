@@ -24,5 +24,5 @@ package org.soulwing.cas.server;
  * @author Carl Harris
  */
 public interface Ticket {
-
+    String getValue();
 }

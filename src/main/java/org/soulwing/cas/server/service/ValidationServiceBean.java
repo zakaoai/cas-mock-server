@@ -18,16 +18,16 @@
  */
 package org.soulwing.cas.server.service;
 
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.UUID;
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 
-import org.soulwing.cas.server.AttributeValue;
-import org.soulwing.cas.server.ProtocolError;
-import org.soulwing.cas.server.ServiceResponse;
-import org.soulwing.cas.server.ServiceResponseBuilderFactory;
-import org.soulwing.cas.server.TicketState;
-import org.soulwing.cas.server.ValidationRequest;
+import org.soulwing.cas.server.*;
 
 /**
  * A {@link ValidationService} implemented as an injectable bean.
@@ -51,19 +51,62 @@ class ValidationServiceBean implements ValidationService {
     final TicketState state = ticketService.validate(request.getTicket());
     if (state == null) {
       return builderFactory.createAuthenticationFailureBuilder()
-          .code(ProtocolError.INVALID_TICKET)
-          .message("invalid ticket")
-          .build();
+              .code(ProtocolError.INVALID_TICKET)
+              .message("invalid ticket")
+              .build();
     }
 
     final String username = state.getUsername();
     final List<AttributeValue> attributes =
-        attributesService.getAttributes(username);
+            attributesService.getAttributes(username);
+
+    String pgtIou = "PGTIOU-" + UUID.randomUUID();
+
+    // If proxy callback URL is provided, issue a PGT and call back the service
+    final String proxyCallback = request.getProxyCallbackUrl();
+    if (proxyCallback != null && !proxyCallback.trim().isEmpty()) {
+      // issue a PGT for this user
+      final Ticket pgt = ticketService.issueFor(username);
+      try {
+        // build callback URL with parameters pgtId and pgtIou
+        final String charset = StandardCharsets.UTF_8.name();
+        final String encodedPgtId = URLEncoder.encode(pgt.getValue(), charset);
+        final String encodedPgtIou = URLEncoder.encode(pgtIou, charset);
+        final String sep = proxyCallback.contains("?") ? "&" : "?";
+        final String callbackUrl = proxyCallback + sep + "pgtId=" + encodedPgtId + "&pgtIou=" + encodedPgtIou;
+
+        URL url = new URL(callbackUrl);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setConnectTimeout(5000);
+        conn.setReadTimeout(5000);
+        conn.connect();
+        int code = conn.getResponseCode();
+        conn.disconnect();
+
+        if (code < 200 || code >= 300) {
+          // callback failed -> respond with invalid proxy callback error
+          return builderFactory.createAuthenticationFailureBuilder()
+                  .code(ProtocolError.INVALID_PROXY_CALLBACK)
+                  .message("proxy callback returned status " + code)
+                  .build();
+        }
+      }
+      catch (Exception ex) {
+        // any exception calling the proxy callback is treated as invalid proxy callback
+        return builderFactory.createAuthenticationFailureBuilder()
+                .code(ProtocolError.INVALID_PROXY_CALLBACK)
+                .message("proxy callback failed: " + ex.getClass().getSimpleName() + ": " + ex.getMessage())
+                .build();
+      }
+    }
 
     return builderFactory.createAuthenticationSuccessBuilder()
-        .user(username)
-        .attributes(attributes)
-        .build();
+            .user(username)
+            .proxyGrantingTicket(pgtIou)
+            .attributes(attributes)
+            .build();
   }
+
 
 }

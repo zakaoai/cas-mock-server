@@ -36,6 +36,9 @@ public interface TicketService {
    * @return authentication ticket.
    */
   Ticket issue();
+
+  /**   * Issues an authentication ticket for the specified username.   * @param username the username to associate with the ticket   * @return authentication ticket.   */
+  Ticket issueFor(String username);
   
   /**
    * Validates an authentication ticket presented by a user to a service.

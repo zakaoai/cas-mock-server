@@ -64,6 +64,27 @@ class TicketServiceBean implements TicketService {
   }
 
   @Override
+  public Ticket issueFor(String username) {
+    if (username == null) {
+      throw new NullPointerException("username is required");
+    }
+
+    TicketValue prior = null;
+    TicketValue ticket = null;
+    byte[] data = new byte[18];
+
+    do {
+      secureRandom.nextBytes(data);
+      String id = "PGT-" + Base64.encodeBase64URLSafeString(data);
+      ticket = new TicketValue(id, username);
+      prior = ticketCache.putIfAbsent(id, ticket);
+    }
+    while (prior != null);
+
+    return ticket;
+  }
+
+  @Override
   public TicketState validate(String ticket) {
     return ticketCache.remove(ticket);
   }
@@ -112,7 +133,11 @@ class TicketServiceBean implements TicketService {
     public String toString() {
       return value;
     }
-    
+
+    @Override
+    public String getValue() {
+      return value;
+    }
   }
 
 }
