@@ -28,6 +28,7 @@ import org.soulwing.cas.server.ProtocolError;
 import org.soulwing.cas.server.ServiceResponseBuilderFactory;
 import org.soulwing.cas.server.Ticket;
 import org.soulwing.cas.server.ValidationRequest;
+import org.soulwing.cas.server.service.ProxyGrantingTicketStore;
 import org.soulwing.cas.server.service.TicketService;
 import org.soulwing.cas.server.service.ValidationService;
 
@@ -47,6 +48,9 @@ public class ProtocolEndpoint {
 
   @Inject
   TicketService ticketService;
+
+  @Inject
+  ProxyGrantingTicketStore pgtStore;
 
   @Inject
   ServiceResponseBuilderFactory builderFactory;
@@ -125,13 +129,24 @@ public class ProtocolEndpoint {
               .build()).build();
     }
 
+    String username = pgtStore.get(pgt);
 
-    // ✅ PAS DE ticketService ici !
-    String pt = "PT-" + UUID.randomUUID();
+    if (username == null) {
+      return Response.ok(
+              builderFactory.createProxyFailureBuilder()
+                      .code(ProtocolError.INVALID_TICKET)
+                      .message("invalid pgt")
+                      .build()
+      ).build();
+    }
+
+// ✅ ensuite on génère PT pour CE user
+    final Ticket proxyTicket = ticketService.issueProxyTicketFor(username);
+
 
     return Response.ok(
             builderFactory.createProxySuccessBuilder()
-                    .proxyTicket(pt)
+                    .proxyTicket(proxyTicket.getValue())
                     .build()
     ).build();
 

@@ -23,7 +23,9 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 
@@ -46,6 +48,9 @@ class ValidationServiceBean implements ValidationService {
   @Inject
   AttributesService attributesService;
 
+  @Inject
+  ProxyGrantingTicketStore pgtStore;
+
   @Override
   public ServiceResponse validate(ValidationRequest request) {
     final TicketState state = ticketService.validate(request.getTicket());
@@ -67,6 +72,8 @@ class ValidationServiceBean implements ValidationService {
     if (proxyCallback != null && !proxyCallback.trim().isEmpty()) {
       // issue a PGT for this user
       final Ticket pgt = ticketService.issueFor(username);
+
+      pgtStore.save(pgt.getValue(), username);
       try {
         // build callback URL with parameters pgtId and pgtIou
         final String charset = StandardCharsets.UTF_8.name();
