@@ -32,6 +32,7 @@ import org.soulwing.cas.server.service.TicketService;
 import org.soulwing.cas.server.service.ValidationService;
 
 import java.net.URI;
+import java.util.UUID;
 
 /**
  * A JAX-RS endpoint that handles CAS protocol requests.
@@ -124,13 +125,16 @@ public class ProtocolEndpoint {
               .build()).build();
     }
 
-    // TODO: Valider le pgt et générer un proxy ticket
-    // Pour maintenant, on utilise le même service de tickets
-    final Ticket proxyTicket = ticketService.issue();
 
-    return Response.ok(builderFactory.createProxySuccessBuilder()
-            .proxyTicket(proxyTicket.getValue())
-            .build()).build();
+    // ✅ PAS DE ticketService ici !
+    String pt = "PT-" + UUID.randomUUID();
+
+    return Response.ok(
+            builderFactory.createProxySuccessBuilder()
+                    .proxyTicket(pt)
+                    .build()
+    ).build();
+
   }
 
 
